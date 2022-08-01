@@ -36,11 +36,11 @@ function exec (cmd) {
   log.normal(`Executing Command: ${cmd}`)
   const { code, stderr } = shell.exec(cmd)
   if (code !== 0)  {
-    log.error(`Command: ${cmd} executed failed`, stderr)
+    log.error(`Command: ${cmd} --> executed failed`, '\n', `Error: ${stderr}`)
     shell.exit(1);
   }
 
-  log.success(`Command: ${cmd} executed successfully`)
+  log.success(`Command: ${cmd} --> executed successfully`)
 }
 
 async function getJSONData(path) {
@@ -96,15 +96,23 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   return newAppVersion;
 }
 
-
-// async function createReleaseTag () {
-
-// }
-
 async function updateBranch (env) {
   if (env === 'uat') {
+    exec('git checkout uat')
     exec('git add src/config/AppVersion.json');
     exec('git commit -m "chore: release new version"');
+    return;
+  }
+
+  if (env === 'stage') {
+    exec('git checkout stage');
+    exec('git merge uat');
+    return;
+  }
+
+  if (env === 'prod') {
+    exec('git checkout prod');
+    exec('git merge stage')
   }
 }
 
@@ -130,9 +138,10 @@ async function main() {
         appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
       }
       
-      await updateBranch(env)
+      await updateBranch(env);
+      
     
-        
+      
       
     } catch (e) {
         log.error(e);
