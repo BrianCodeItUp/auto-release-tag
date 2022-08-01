@@ -3,27 +3,44 @@ const { hideBin } = require('yargs/helpers');
 const argv = yargs(hideBin(process.argv)).argv;
 const path = require('path');
 const fs = require('fs').promises;
-const { exec: execBase } = require('child_process')
+// const { exec: execBase } = require('child_process');
+const colors = require('chalk')
+const shell = require('shelljs')
 
+/**
+ * 將要印出的訊息加上顏色
+ * @param {string} color 印出的顏色;
+ * @param {string | string[]} msg 訊息
+ * @returns {string[]}
+ */
+function colorWrapper (color, msg) {
+  const newMsg = [];
+  const addColor =  colors.bold[color];
+  if (Array.isArray(msg)) {
+    msg.forEach(value => {
+      newMsg.push(addColor(value))
+    })
+    return newMsg;
+  }
+
+  return [addColor(msg)]
+}
+
+const log = {
+  normal: (...msg) => console.log(...colorWrapper('blue', msg)),
+  error: (...msg) => console.log(...colorWrapper('red', msg)),
+  success: (...msg) => console.log(...colorWrapper('green', msg))
+}
 
 function exec (cmd) {
-  return new Promise((resolve, reject) => {
-    execBase(cmd, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+  log.normal(`Executing Command: ${cmd}`)
+  const { code, stderr } = shell.exec(cmd)
+  if (code !== 0)  {
+    log.error(`Command: ${cmd} executed failed`, stderr)
+    shell.exit(1);
+  }
 
-      if (stderr) {
-        reject(stderr)
-        return;
-      }
-      if (stdout) {
-        resolve(stdout);
-        return;
-      }
-    })
-  })
+  log.success(`Command: ${cmd} executed successfully`)
 }
 
 async function getJSONData(path) {
@@ -86,9 +103,9 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
 
 async function updateBranch (env) {
   if (env === 'uat') {
-    await exec('git add src/config/AppVersion.json');
-    await exec('git commit -m "chore: release new version"');
-  }  
+    exec('git add src/config/AppVersion.json');
+    exec('git commit -m "chore: release new version"');
+  }
 }
 
 async function main() {
@@ -118,7 +135,7 @@ async function main() {
         
       
     } catch (e) {
-        console.error(e);
+        log.error(e);
     }
 }
 
