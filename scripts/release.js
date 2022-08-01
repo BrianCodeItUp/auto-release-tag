@@ -136,7 +136,6 @@ async function createAndPushTags({ appVersion, env }) {
     const currentVersion = appVersion[brand];
     const tag = `${env}-${brand}-${currentVersion}-jsbundle`
     exec(`git tag ${tag}`)  
-    // exec(`git push `)
   }
 }
 
