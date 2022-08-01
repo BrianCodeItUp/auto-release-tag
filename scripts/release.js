@@ -111,7 +111,6 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
 async function updateBranch (env) {
   log.normal('Updating Branch')
   if (env === 'uat') {
-    exec('git checkout uat')
     exec('git add src/config/AppVersion.json');
     exec('git commit -m "chore: release new version"');
     return;
@@ -161,6 +160,8 @@ async function main() {
       let appVersion = await getJSONData(appVersionFilePath);
       
       if (env === 'uat') {
+        /** 只有在 uat branch  才會更新 release 版本*/
+        exec('git checkout uat')
         appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
       }
       
