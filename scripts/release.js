@@ -146,6 +146,13 @@ async function createAndPushTags({ appVersion, env }) {
   }
 }
 
+/**
+ * 主邏輯:
+ * 
+ * uat: 更新 AppVersion.json，依照 AppVersion.json 檔中的版本，創建、push tags
+ * stage: merge uat branch, 依照 AppVersion.json 檔中的版本，創建、push tags
+ * prod: merge stage branch, 依照 AppVersion.json 檔中的版本，創建、push tags
+ */
 async function main() {
     const appVersionFilePath = path.join(process.cwd(), 'src', 'config', 'appVersion.json');
     const { type = '', env ='' } = argv
