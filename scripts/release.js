@@ -108,6 +108,12 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   return newAppVersion;
 }
 
+/**
+ * 更新 branch
+ * - uat: commit 更新的 AppVersion.json file
+ * - stage: merge uat
+ * - prod: merge prod
+ */
 async function updateBranch (env) {
   log.normal('Updating Branch')
   if (env === 'uat') {
@@ -134,9 +140,9 @@ async function updateBranch (env) {
 async function createAndPushTags({ appVersion, env }) {
   for (let brand of Object.keys(appVersion)) {
     const currentVersion = appVersion[brand];
-    const tag = `${env}-${brand}-${currentVersion}-jsbundle`
-    exec(`git tag ${tag}`)  
-    // exec(`git push `)
+    const tag = `${env}-${brand}-${currentVersion}-jsbundle`;
+    exec(`git tag ${tag}`); 
+    exec(`git push origin ${tag}`);
   }
 }
 
