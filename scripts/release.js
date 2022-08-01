@@ -32,6 +32,10 @@ const log = {
   success: (...msg) => console.log(...colorWrapper('green', msg))
 }
 
+/**
+ * 執行指令
+ * @param {string} cmd terminal command
+ */
 function exec (cmd) {
   log.normal(`Executing Command: ${cmd}`)
   const { code, stderr } = shell.exec(cmd)
@@ -43,6 +47,11 @@ function exec (cmd) {
   log.success(`Command: ${cmd} --> executed successfully`)
 }
 
+/**
+ * 取得並 parse JSON
+ * @param {string} json 檔路徑 
+ * @returns {object}
+ */
 async function getJSONData(path) {
     const json = await fs.readFile(path);
     const data = JSON.parse(json);
@@ -84,6 +93,9 @@ function updateReleaseVersion(currentVersion, releaseType) {
     }
 }
 
+/**
+ * 更新目前 AppVersion.json 檔中的各品牌版本
+ */
 async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   const newAppVersion = {};
   for (let brand of Object.keys(appVersion)) {
@@ -116,6 +128,18 @@ async function updateBranch (env) {
   }
 }
 
+/**
+ * 創建且 push 各品牌 release tag
+ */
+async function createAndPushTags({ appVersion, env }) {
+  for (let brand of Object.keys(appVersion)) {
+    const currentVersion = appVersion[brand];
+    const tag = `${env}-${brand}-${currentVersion}-jsbundle`
+    exec(`git tag ${tag}`)  
+    // exec(`git push `)
+  }
+}
+
 async function main() {
     const appVersionFilePath = path.join(process.cwd(), 'src', 'config', 'appVersion.json');
     const { type = '', env ='' } = argv
@@ -123,12 +147,13 @@ async function main() {
 
     const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
 
-    if (!isReleaseTypeValid) {
-        throw Error('Release Type is invalid. Please use \n\n"yarn release --type {major|minor|patch} --env {uat|stage|prod}" \n');
+    if (env === 'uat' && !isReleaseTypeValid) {
+        log.error('If you are trying to release uat. You must provide release type')
+        throw Error(colorWrapper('red', 'Release Type is invalid. Please use \n\n"yarn release --env {uat|stage|prod} --type {major|minor|patch}" \n'));
     }
 
     if (!isEnvValid) {
-      throw Error('No Env Type is invalid. Please use \n\n"yarn release --type {major|minor|patch} --env {uat|stage|prod}" \n')
+      throw Error('No Env Type is invalid. Please use \n\n"yarn release --env {uat|stage|prod} --type {major|minor|patch}" \n')
     }
 
     try {
@@ -139,10 +164,7 @@ async function main() {
       }
       
       await updateBranch(env);
-      
-    
-      
-      
+      await createAndPushTags({ appVersion, env });
     } catch (e) {
         log.error(e);
     }
