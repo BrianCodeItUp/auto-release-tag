@@ -109,6 +109,7 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
 }
 
 async function updateBranch (env) {
+  log.normal('Updating Branch')
   if (env === 'uat') {
     exec('git checkout uat')
     exec('git add src/config/AppVersion.json');
