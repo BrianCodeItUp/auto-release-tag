@@ -1,0 +1,12 @@
+{
+  "name": "auto-release-tag",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "release": "node scripts/release.js"
+  },
+  "devDependencies": {
+    "yargs": "^17.5.1"
+  }
+}
