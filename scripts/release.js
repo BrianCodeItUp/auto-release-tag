@@ -144,7 +144,7 @@ function checkBranchIsInSync (branch) {
 async function updateBranch (env) {
   log.normal('Updating Branch...')
   
-  const mergedBranchByEnv = {
+  const branchToMergeByEnv = {
     /** uat 要 merge dev 分支 */
     "uat": "dev",
     /** stage 要 merge uat 分支 */
@@ -152,7 +152,7 @@ async function updateBranch (env) {
     /** prod 要 merge stage 分支 */
     "prod": "stage"
   }
-  const branchToMerge = mergedBranchByEnv(env)
+  const branchToMerge = branchToMergeByEnv[env]
   /** 確認這次 Release 分支是否已與 remote 同步 */
   checkBranchIsInSync(env)
   /** 確認要 Merge 的分支是否已與 remote 同步 */
