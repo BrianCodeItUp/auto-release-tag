@@ -36,15 +36,16 @@ const log = {
  * 執行指令
  * @param {string} cmd terminal command
  */
-function exec (cmd, { printExecutingCmd = false }) {
+function exec (cmd, { printExecutingCmd } = { printExecutingCmd: false }) {
   printExecutingCmd && log.normal(`Executing Command: ${cmd}`)
-  const { code, stderr } = shell.exec(cmd)
+  const { code, stderr, stdout } = shell.exec(cmd)
   if (code !== 0)  {
     log.error(`Command: ${cmd} --> executed failed`, '\n', `Error: ${stderr}`)
     shell.exit(1);
   }
 
   printExecutingCmd && log.success(`Command: ${cmd} --> executed successfully`)
+  return stdout
 }
 
 /**
@@ -129,6 +130,10 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
  */
 async function updateBranch (env) {
   log.normal('Updating Branch')
+  
+  /** 同步 local 與 remote 分支 */
+  exec(`git diff ${env} origin/${env}`, { printExecutingCmd: true })
+
   if (env === 'uat') {
     exec('git checkout uat');
     exec('git merge dev');
@@ -175,7 +180,7 @@ async function main() {
     const { type = '', env ='' } = argv
     const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
 
-    const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
+    const isEnvValid = ['prod', 'stage', 'uat', 'dev'].includes(env);
 
     if (env === 'uat' && !isReleaseTypeValid) {
         log.error('If you are trying to release uat. You must provide release type')
@@ -192,11 +197,11 @@ async function main() {
       await updateBranch(env);
 
       /** uat 更新版號需要更新版號 */
-      if (env === 'uat') {
-        appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
-      }
+      // if (env === 'uat') {
+      //   appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
+      // }
 
-      await createAndPushTags({ appVersion, env });
+      // await createAndPushTags({ appVersion, env });
     } catch (e) {
         log.error(e);
     }
