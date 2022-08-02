@@ -36,15 +36,16 @@ const log = {
  * 執行指令
  * @param {string} cmd terminal command
  */
-function exec (cmd) {
-  log.normal(`Executing Command: ${cmd}`)
-  const { code, stderr } = shell.exec(cmd)
+function exec (cmd, { printExecutingCmd } = { printExecutingCmd: false }) {
+  printExecutingCmd && log.normal(`Executing Command: ${cmd}`)
+  const { code, stderr, stdout } = shell.exec(cmd)
   if (code !== 0)  {
     log.error(`Command: ${cmd} --> executed failed`, '\n', `Error: ${stderr}`)
     shell.exit(1);
   }
 
-  log.success(`Command: ${cmd} --> executed successfully`)
+  printExecutingCmd && log.success(`Command: ${cmd} --> executed successfully`)
+  return stdout
 }
 
 /**
@@ -58,6 +59,16 @@ async function getJSONData(path) {
     return data;
 }
 
+/**
+ * 更新版號
+ * 
+ * NOTE: 
+ * - 更新 major 時 minor 和 patch 版好歸零
+ * - 更新 minor 時 patch 版號歸零
+ * @param {string} currentVersion 當前版本
+ * @param {string} releaseType 版本更新類型 ex: major | minor | patch
+ * @returns {string} 更新過的版號
+ */
 function updateReleaseVersion(currentVersion, releaseType) {
     const RELEASE_TYPES = ['major', 'minor', 'patch'];
     const isReleaseTypeValid = RELEASE_TYPES.includes(releaseType);
@@ -105,46 +116,84 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   }
 
   await fs.writeFile(versionFilePath, JSON.stringify(newAppVersion, null, 2));
+  exec('git add src/config/AppVersion.json');
+  exec('git commit -m "chore: release new version"');
+  exec('git push')
   return newAppVersion;
 }
 
+/**
+ * 確認該 branch 與 Remote branch 是否為同步的狀態
+ * @param {string} branch 分支名稱
+ */
+function checkBranchIsInSync (branch) {
+  log.normal(`-----> Checking ${colorWrapper('green', `"${branch}"`)} branch is in sync with remote branch...`)
+  const diffMessage = exec(`git diff ${branch} origin/${branch}`);
+  
+  if (diffMessage) {
+    log.error(`Found branch "${branch}" is not in sync with remote branch`)
+    throw Error(); 
+  }
+}
+/**
+ * 更新 branch
+ * - uat: commit 更新的 AppVersion.json file
+ * - stage: merge uat
+ * - prod: merge prod
+ */
 async function updateBranch (env) {
-  log.normal('Updating Branch')
-  if (env === 'uat') {
-    exec('git add src/config/AppVersion.json');
-    exec('git commit -m "chore: release new version"');
-    return;
+  log.normal('Updating Branch...')
+  
+  const mergedBranchByEnv = {
+    /** uat 要 merge dev 分支 */
+    "uat": "dev",
+    /** stage 要 merge uat 分支 */
+    "stage": "uat",
+    /** prod 要 merge stage 分支 */
+    "prod": "stage"
   }
+  const branchToMerge = mergedBranchByEnv(env)
+  /** 確認這次 Release 分支是否已與 remote 同步 */
+  checkBranchIsInSync(env)
+  /** 確認要 Merge 的分支是否已與 remote 同步 */
+  checkBranchIsInSync(branchToMerge)
+  
 
-  if (env === 'stage') {
-    exec('git checkout stage');
-    exec('git merge uat');
-    return;
-  }
-
-  if (env === 'prod') {
-    exec('git checkout prod');
-    exec('git merge stage')
-  }
+  log.normal('----> Start Merging branch ')
+  
+  exec(`git checkout ${env}`);
+  exec(`git merge ${branchToMerge}`)
+  exec('git push')
+  log.success('Updating Branch Succeed 👍')
 }
 
 /**
  * 創建且 push 各品牌 release tag
  */
 async function createAndPushTags({ appVersion, env }) {
+  log.normal('Create and Push release tags...')
   for (let brand of Object.keys(appVersion)) {
     const currentVersion = appVersion[brand];
-    const tag = `${env}-${brand}-${currentVersion}-jsbundle`
-    exec(`git tag ${tag}`)  
+    const tag = `${env}-${brand}-${currentVersion}-jsbundle`;
+    exec(`git tag ${tag}`); 
+    exec(`git push origin ${tag}`);
   }
+  log.success('Create and Push release tags succeed 👍')
 }
 
+/**
+ * 主邏輯:
+ * 
+ * uat: 更新 AppVersion.json，依照 AppVersion.json 檔中的版本，創建、push tags
+ * stage: merge uat branch, 依照 AppVersion.json 檔中的版本，創建、push tags
+ * prod: merge stage branch, 依照 AppVersion.json 檔中的版本，創建、push tags
+ */
 async function main() {
     const appVersionFilePath = path.join(process.cwd(), 'src', 'config', 'appVersion.json');
     const { type = '', env ='' } = argv
     const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
 
-    const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
+    const isEnvValid = ['prod', 'stage', 'uat', 'dev'].includes(env);
 
     if (env === 'uat' && !isReleaseTypeValid) {
         log.error('If you are trying to release uat. You must provide release type')
@@ -157,14 +206,14 @@ async function main() {
 
     try {
       let appVersion = await getJSONData(appVersionFilePath);
-      
+      /** 更新 branch */
+      await updateBranch(env);
+
+      /** uat 更新版號需要更新版號 */
       if (env === 'uat') {
-        /** 只有在 uat branch  才會更新 release 版本*/
-        exec('git checkout uat')
         appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
       }
-      
-      await updateBranch(env);
+
       await createAndPushTags({ appVersion, env });
     } catch (e) {
         log.error(e);
