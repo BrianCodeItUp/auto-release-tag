@@ -36,15 +36,15 @@ const log = {
  * 執行指令
  * @param {string} cmd terminal command
  */
-function exec (cmd) {
-  log.normal(`Executing Command: ${cmd}`)
+function exec (cmd, { printExecutingCmd = false }) {
+  printExecutingCmd && log.normal(`Executing Command: ${cmd}`)
   const { code, stderr } = shell.exec(cmd)
   if (code !== 0)  {
     log.error(`Command: ${cmd} --> executed failed`, '\n', `Error: ${stderr}`)
     shell.exit(1);
   }
 
-  log.success(`Command: ${cmd} --> executed successfully`)
+  printExecutingCmd && log.success(`Command: ${cmd} --> executed successfully`)
 }
 
 /**
@@ -58,6 +58,16 @@ async function getJSONData(path) {
     return data;
 }
 
+/**
+ * 更新版號
+ * 
+ * NOTE: 
+ * - 更新 major 時 minor 和 patch 版好歸零
+ * - 更新 minor 時 patch 版號歸零
+ * @param {string} currentVersion 當前版本
+ * @param {string} releaseType 版本更新類型 ex: major | minor | patch
+ * @returns {string} 更新過的版號
+ */
 function updateReleaseVersion(currentVersion, releaseType) {
     const RELEASE_TYPES = ['major', 'minor', 'patch'];
     const isReleaseTypeValid = RELEASE_TYPES.includes(releaseType);
@@ -105,6 +115,9 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   }
 
   await fs.writeFile(versionFilePath, JSON.stringify(newAppVersion, null, 2));
+  exec('git add src/config/AppVersion.json');
+  exec('git commit -m "chore: release new version"');
+  exec('git push')
   return newAppVersion;
 }
 
@@ -117,20 +130,24 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
 async function updateBranch (env) {
   log.normal('Updating Branch')
   if (env === 'uat') {
-    exec('git add src/config/AppVersion.json');
-    exec('git commit -m "chore: release new version"');
+    exec('git checkout uat');
+    exec('git merge dev');
+    exec('git push');
     return;
   }
 
   if (env === 'stage') {
     exec('git checkout stage');
     exec('git merge uat');
+    exec('git push');
     return;
   }
 
   if (env === 'prod') {
     exec('git checkout prod');
     exec('git merge stage')
+    exec('git push');
+    return;
   }
 }
 
@@ -171,14 +188,14 @@ async function main() {
 
     try {
       let appVersion = await getJSONData(appVersionFilePath);
-      
+      /** 更新 branch */
+      await updateBranch(env);
+
+      /** uat 更新版號需要更新版號 */
       if (env === 'uat') {
-        /** 只有在 uat branch  才會更新 release 版本*/
-        exec('git checkout uat')
         appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
       }
-      
-      await updateBranch(env);
+
       await createAndPushTags({ appVersion, env });
     } catch (e) {
         log.error(e);
