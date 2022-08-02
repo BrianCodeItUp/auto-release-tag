@@ -127,7 +127,7 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
  * @param {string} branch 分支名稱
  */
 function checkBranchIsInSync (branch) {
-  log.normal(`-----> Checking ${colorWrapper('green', `"${branch}"`)} branch is in sync with remote branch...`)
+  log.normal(`----> Checking ${colorWrapper('green', `"${branch}"`)} branch is in sync with remote branch...`)
   const diffMessage = exec(`git diff ${branch} origin/${branch}`);
   
   if (diffMessage) {
@@ -215,6 +215,7 @@ async function main() {
       }
 
       await createAndPushTags({ appVersion, env });
+      log.success("Release version update succeed 🚀🚀🚀. \n Check the gitlab CI pipeline on https://gitlab.paradise-soft.com.tw/nativeapp/ttmj-rn/-/pipelines")
     } catch (e) {
         log.error(e);
     }
