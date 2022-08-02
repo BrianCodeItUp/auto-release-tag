@@ -123,49 +123,62 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
 }
 
 /**
+ * 確認該 branch 與 Remote branch 是否為同步的狀態
+ * @param {string} branch 分支名稱
+ */
+function checkBranchIsInSync (branch) {
+  log.normal(`-----> Checking ${colorWrapper('green', `"${branch}"`)} branch is in sync with remote branch...`)
+  const diffMessage = exec(`git diff ${branch} origin/${branch}`);
+  
+  if (diffMessage) {
+    log.error(`Found branch "${branch}" is not in sync with remote branch`)
+    throw Error(); 
+  }
+}
+/**
  * 更新 branch
  * - uat: commit 更新的 AppVersion.json file
  * - stage: merge uat
  * - prod: merge prod
  */
 async function updateBranch (env) {
-  log.normal('Updating Branch')
+  log.normal('Updating Branch...')
   
-  /** 同步 local 與 remote 分支 */
-  exec(`git diff ${env} origin/${env}`, { printExecutingCmd: true })
-
-  if (env === 'uat') {
-    exec('git checkout uat');
-    exec('git merge dev');
-    exec('git push');
-    return;
+  const mergedBranchByEnv = {
+    /** uat 要 merge dev 分支 */
+    "uat": "dev",
+    /** stage 要 merge uat 分支 */
+    "stage": "uat",
+    /** prod 要 merge stage 分支 */
+    "prod": "stage"
   }
+  const branchToMerge = mergedBranchByEnv(env)
+  /** 確認這次 Release 分支是否已與 remote 同步 */
+  checkBranchIsInSync(env)
+  /** 確認要 Merge 的分支是否已與 remote 同步 */
+  checkBranchIsInSync(branchToMerge)
+  
 
-  if (env === 'stage') {
-    exec('git checkout stage');
-    exec('git merge uat');
-    exec('git push');
-    return;
-  }
-
-  if (env === 'prod') {
-    exec('git checkout prod');
-    exec('git merge stage')
-    exec('git push');
-    return;
-  }
+  log.normal('----> Start Merging branch ')
+  
+  exec(`git checkout ${env}`);
+  exec(`git merge ${branchToMerge}`)
+  exec('git push')
+  log.success('Updating Branch Succeed 👍')
 }
 
 /**
  * 創建且 push 各品牌 release tag
  */
 async function createAndPushTags({ appVersion, env }) {
+  log.normal('Create and Push release tags...')
   for (let brand of Object.keys(appVersion)) {
     const currentVersion = appVersion[brand];
     const tag = `${env}-${brand}-${currentVersion}-jsbundle`;
     exec(`git tag ${tag}`); 
     exec(`git push origin ${tag}`);
   }
+  log.success('Create and Push release tags succeed 👍')
 }
 
 /**
@@ -197,11 +210,11 @@ async function main() {
       await updateBranch(env);
 
       /** uat 更新版號需要更新版號 */
-      // if (env === 'uat') {
-      //   appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
-      // }
+      if (env === 'uat') {
+        appVersion = await updateAppVersion({ appVersion, releaseType: type, versionFilePath : appVersionFilePath });
+      }
 
-      // await createAndPushTags({ appVersion, env });
+      await createAndPushTags({ appVersion, env });
     } catch (e) {
         log.error(e);
     }
