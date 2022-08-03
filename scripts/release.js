@@ -3,61 +3,10 @@ const { hideBin } = require('yargs/helpers');
 const argv = yargs(hideBin(process.argv)).argv;
 const path = require('path');
 const fs = require('fs').promises;
-// const { exec: execBase } = require('child_process');
-const colors = require('chalk')
-const shell = require('shelljs')
-
-/**
- * 將要印出的訊息加上顏色
- * @param {string} color 印出的顏色;
- * @param {string | string[]} msg 訊息
- * @returns {string[]}
- */
-function colorWrapper (color, msg) {
-  const newMsg = [];
-  const addColor =  colors.bold[color];
-  if (Array.isArray(msg)) {
-    msg.forEach(value => {
-      newMsg.push(addColor(value))
-    })
-    return newMsg;
-  }
-
-  return [addColor(msg)]
-}
-
-const log = {
-  normal: (...msg) => console.log(...colorWrapper('blue', msg)),
-  error: (...msg) => console.log(...colorWrapper('red', msg)),
-  success: (...msg) => console.log(...colorWrapper('green', msg))
-}
-
-/**
- * 執行指令
- * @param {string} cmd terminal command
- */
-function exec (cmd, { printExecutingCmd } = { printExecutingCmd: false }) {
-  printExecutingCmd && log.normal(`Executing Command: ${cmd}`)
-  const { code, stderr, stdout } = shell.exec(cmd)
-  if (code !== 0)  {
-    log.error(`Command: ${cmd} --> executed failed`, '\n', `Error: ${stderr}`)
-    shell.exit(1);
-  }
-
-  printExecutingCmd && log.success(`Command: ${cmd} --> executed successfully`)
-  return stdout
-}
-
-/**
- * 取得並 parse JSON
- * @param {string} json 檔路徑 
- * @returns {object}
- */
-async function getJSONData(path) {
-    const json = await fs.readFile(path);
-    const data = JSON.parse(json);
-    return data;
-}
+const { log, colorWrapper } = require('./utils/logger')
+const { checkBranchIsInSync } = require('./utils/git-helpers')
+const exec = require('./utils/exec')
+const { getJSONData } = require('./utils/common')
 
 /**
  * 更新版號
@@ -110,6 +59,10 @@ function updateReleaseVersion(currentVersion, releaseType) {
 async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   const newAppVersion = {};
   for (let brand of Object.keys(appVersion)) {
+      /** Skip aa */
+      if (brand === 'aa') {
+        continue;
+      }
       const currentVersion = appVersion[brand];
       const newVersion = updateReleaseVersion(currentVersion, releaseType);
       newAppVersion[brand] = newVersion;
@@ -122,19 +75,6 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
   return newAppVersion;
 }
 
-/**
- * 確認該 branch 與 Remote branch 是否為同步的狀態
- * @param {string} branch 分支名稱
- */
-function checkBranchIsInSync (branch) {
-  log.normal(`----> Checking ${colorWrapper('green', `"${branch}"`)} branch is in sync with remote branch...`)
-  const diffMessage = exec(`git diff ${branch} origin/${branch}`);
-  
-  if (diffMessage) {
-    log.error(`Found branch "${branch}" is not in sync with remote branch`)
-    throw Error(); 
-  }
-}
 /**
  * 更新 branch
  * - uat: commit 更新的 AppVersion.json file
@@ -153,18 +93,17 @@ async function updateBranch (env) {
     "prod": "stage"
   }
   const branchToMerge = branchToMergeByEnv[env]
+  log.normal(`Merge ${colorWrapper('green', branchToMerge)} into ${colorWrapper('green', env)}`)
   /** 確認這次 Release 分支是否已與 remote 同步 */
   checkBranchIsInSync(env)
   /** 確認要 Merge 的分支是否已與 remote 同步 */
   checkBranchIsInSync(branchToMerge)
-  
 
-  log.normal('----> Start Merging branch ')
-  
+  log.normal('----> Start Merging branch...')  
   exec(`git checkout ${env}`);
-  exec(`git merge ${branchToMerge}`)
-  exec('git push')
-  log.success('Updating Branch Succeed 👍')
+  exec(`git merge ${branchToMerge}`);
+  exec('git push');
+  log.success('Updating Branch successfully 👍')
 }
 
 /**
@@ -173,12 +112,16 @@ async function updateBranch (env) {
 async function createAndPushTags({ appVersion, env }) {
   log.normal('Create and Push release tags...')
   for (let brand of Object.keys(appVersion)) {
+    /** Skip aa */
+    if (brand === 'aa') {
+      continue;
+    }
     const currentVersion = appVersion[brand];
     const tag = `${env}-${brand}-${currentVersion}-jsbundle`;
     exec(`git tag ${tag}`); 
     exec(`git push origin ${tag}`);
   }
-  log.success('Create and Push release tags succeed 👍')
+  log.success('Create and Push release tags successfully 👍')
 }
 
 /**
@@ -191,7 +134,7 @@ async function createAndPushTags({ appVersion, env }) {
 async function main() {
     const appVersionFilePath = path.join(process.cwd(), 'src', 'config', 'appVersion.json');
     const { type = '', env ='' } = argv
-    const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
+    const isReleaseTypeValid = ['major', 'minor', 'patch', ''].includes(type);
 
     const isEnvValid = ['prod', 'stage', 'uat', 'dev'].includes(env);
 
@@ -215,7 +158,8 @@ async function main() {
       }
 
       await createAndPushTags({ appVersion, env });
-      log.success("Release version update succeed 🚀🚀🚀. \n Check the gitlab CI pipeline on https://gitlab.paradise-soft.com.tw/nativeapp/ttmj-rn/-/pipelines")
+      log.success("\nRelease Version:", `\n\n${JSON.stringify(appVersion, null, 1)}`, "\n");
+      log.success("Release version update successfully 🚀🚀🚀  \nCheck the gitlab CI pipeline on https://gitlab.paradise-soft.com.tw/nativeapp/ttmj-rn/-/pipelines");
     } catch (e) {
         log.error(e);
     }
