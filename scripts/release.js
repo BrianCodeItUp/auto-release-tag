@@ -102,8 +102,7 @@ async function updateBranch (env) {
   /** 確認要 Merge 的分支是否已與 remote 同步 */
   checkBranchIsInSync(branchToMerge)
 
-  log.normal('----> Start Merging branch...')  
-  exec(`git checkout ${env}`);
+  log.normal('----> Start Merging branch...');
   exec(`git merge ${branchToMerge}`);
   exec('git push');
   log.success('Updating Branch successfully 👍')
