@@ -57,6 +57,7 @@ function updateReleaseVersion(currentVersion, releaseType) {
  * 更新目前 AppVersion.json 檔中的各品牌版本
  */
 async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
+  log.normal("Updating App Version...")
   const newAppVersion = {};
   for (let brand of Object.keys(appVersion)) {
       /** Skip aa */
@@ -67,11 +68,13 @@ async function updateAppVersion ({appVersion, releaseType, versionFilePath}) {
       const newVersion = updateReleaseVersion(currentVersion, releaseType);
       newAppVersion[brand] = newVersion;
   }
-
+  log.normal("----> Update AppVersion.json file...")
   await fs.writeFile(versionFilePath, JSON.stringify(newAppVersion, null, 2));
+  log.normal("----> Add Release Commit...")
   exec('git add src/config/AppVersion.json');
   exec('git commit -m "chore: release new version"');
-  exec('git push')
+  exec('git push');
+  log.success("Update App Version successfully 👍")
   return newAppVersion;
 }
 
@@ -148,6 +151,8 @@ async function main() {
     }
 
     try {
+      /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
+      exec(`git checkout ${env}`);
       let appVersion = await getJSONData(appVersionFilePath);
       /** 更新 branch */
       await updateBranch(env);
