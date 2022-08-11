@@ -202,7 +202,7 @@ async function main(appVersion) {
         delete require.cache[require.resolve('../src/config/AppVersion.json')];
         const newAppVersion = require('../src/config/AppVersion.json');
         await createAndPushTags({ appVersion: newAppVersion, env, brands: brandsToPublish });
-        log.success('\nRelease Version:', `\n\n${JSON.stringify(appVersion, null, 1)}`, '\n');
+        log.success('\nRelease Version:', `\n\n${JSON.stringify(newAppVersion, null, 1)}`, '\n');
         log.success(
             'Release version update successfully 🚀🚀🚀  \nCheck the gitlab CI pipeline on https://gitlab.paradise-soft.com.tw/nativeapp/ttmj-rn/-/pipelines',
         );
