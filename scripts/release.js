@@ -152,9 +152,7 @@ async function createAndPushTags({ appVersion, env, brands }) {
  */
 async function main() {
     const { type = '', env = '', brand = '' } = argv;
-    /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
-    exec(`git checkout ${env}`);
-    const appVersion = require('../src/config/AppVersion.json');
+    
     const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
     const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
 
@@ -175,7 +173,9 @@ async function main() {
     }
 
     try {
-        
+        /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
+        exec(`git checkout ${env}`);
+        const appVersion = require('../src/config/AppVersion.json');    
         const brandsToPublish = brand ? brand.split(',').map((str) => str.trim()) : [];
         const availableBrands = Object.keys(appVersion).map((brandName) => (brandName === 'threeh' ? '3h' : brandName));
         /** 如果有品牌參數，檢核品牌參數是否正確 */
