@@ -4,7 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "release:uat:fix": "node scripts/release.js --env uat --type patch",
+    "release:uat:feature": "node scripts/release.js --env uat --type minor",
+    "release:stage": "node scripts/release.js --env stage",
+    "release:prod": "node scripts/release.js --env prod"
   },
   "devDependencies": {
     "chalk": "4",

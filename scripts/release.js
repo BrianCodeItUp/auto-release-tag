@@ -150,10 +150,12 @@ async function createAndPushTags({ appVersion, env, brands }) {
  * stage: merge uat branch, 依照 AppVersion.json 檔中的版本，創建、push tags
  * prod: merge stage branch, 依照 AppVersion.json 檔中的版本，創建、push tags
  */
-async function main(appVersion) {
+async function main() {
     const { type = '', env = '', brand = '' } = argv;
+    /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
+    exec(`git checkout ${env}`);
+    const appVersion = require('../src/config/AppVersion.json');
     const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
-
     const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
 
     if (env === 'uat' && !isReleaseTypeValid) {
@@ -173,8 +175,7 @@ async function main(appVersion) {
     }
 
     try {
-        /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
-        exec(`git checkout ${env}`);
+        
         const brandsToPublish = brand ? brand.split(',').map((str) => str.trim()) : [];
         const availableBrands = Object.keys(appVersion).map((brandName) => (brandName === 'threeh' ? '3h' : brandName));
         /** 如果有品牌參數，檢核品牌參數是否正確 */
@@ -211,5 +212,5 @@ async function main(appVersion) {
     }
 }
 
-const appVersion = require('../src/config/AppVersion.json');
-main(appVersion);
+
+main();
