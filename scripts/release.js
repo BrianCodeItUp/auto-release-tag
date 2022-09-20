@@ -3,7 +3,6 @@ const { hideBin } = require('yargs/helpers');
 const path = require('path');
 const fs = require('fs').promises;
 const { log, colorWrapper } = require('./utils/logger');
-const { checkBranchIsInSync } = require('./utils/git-helpers');
 const exec = require('./utils/exec');
 
 const argv = yargs(hideBin(process.argv)).argv;
@@ -88,36 +87,6 @@ async function updateAppVersion({ appVersion, releaseType, brands = [] }) {
 }
 
 /**
- * 更新 branch
- * - uat: commit 更新的 AppVersion.json file
- * - stage: merge uat
- * - prod: merge prod
- */
-async function updateBranch(env) {
-    log.normal('Updating Branch...');
-
-    const branchToMergeByEnv = {
-        /** uat 要 merge dev 分支 */
-        uat: 'dev',
-        /** stage 要 merge uat 分支 */
-        stage: 'uat',
-        /** prod 要 merge stage 分支 */
-        prod: 'stage',
-    };
-    const branchToMerge = branchToMergeByEnv[env];
-    log.normal(`Merge ${colorWrapper('green', branchToMerge)} into ${colorWrapper('green', env)}`);
-    /** 確認這次 Release 分支是否已與 remote 同步 */
-    checkBranchIsInSync(env);
-    /** 確認要 Merge 的分支是否已與 remote 同步 */
-    checkBranchIsInSync(branchToMerge);
-
-    log.normal('----> Start Merging branch...');
-    exec(`git merge ${branchToMerge}`);
-    exec('git push');
-    log.success('Updating Branch successfully 👍');
-}
-
-/**
  * 創建且 push 各品牌 release tag
  * @param {object} appVersion 品牌版本 ex: { 3h: 'x.x.x', ttmj: 'x.x.x' }
  * @param {string} env        release 環境  ex: uat | stage | prod
@@ -152,12 +121,16 @@ async function createAndPushTags({ appVersion, env, brands }) {
  */
 async function main() {
     const { type = '', env = '', brand = '' } = argv;
-    
-    const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
-    const isEnvValid = ['prod', 'stage', 'uat'].includes(env);
+    const isEnvValid = ['prod', 'stage', 'uat', 'dev'].includes(env);
 
-    if (env === 'uat' && !isReleaseTypeValid) {
-        log.error('If you are trying to release uat. You must provide release type');
+    if (!isEnvValid) {
+        throw Error(
+            'Env Type is invalid. Please use \n\n"yarn release --env {dev|uat|stage|prod} --type {major|minor|patch}" \n',
+        );
+    }
+
+    const isReleaseTypeValid = ['major', 'minor', 'patch'].includes(type);
+    if (type && !isReleaseTypeValid) {
         throw Error(
             colorWrapper(
                 'red',
@@ -166,37 +139,24 @@ async function main() {
         );
     }
 
-    if (!isEnvValid) {
-        throw Error(
-            'Env Type is invalid. Please use \n\n"yarn release --env {uat|stage|prod} --type {major|minor|patch}" \n',
-        );
+    const appVersion = require('../src/config/AppVersion.json');
+    const brandsToPublish = brand ? brand.split(',').map((str) => str.trim()) : [];
+    const availableBrands = Object.keys(appVersion).map((brandName) => (brandName === 'threeh' ? '3h' : brandName));
+    /** 如果有品牌參數，檢核品牌參數是否正確 */
+    if (brandsToPublish.length > 0) {
+        brandsToPublish.forEach((brandToPublish) => {
+            const isBrandExist = availableBrands.includes(brandToPublish);
+            if (!isBrandExist) {
+                throw Error(
+                    `Brand "${brandToPublish}" is not exist in AppVersion.json. Available brands: ${availableBrands.join(
+                        ' | ',
+                    )}`,
+                );
+            }
+        });
     }
-
     try {
-        /** 需要先切換到要 release 的分支，因為 dev 不會壓版號 */
-        exec(`git checkout ${env}`);
-        const appVersion = require('../src/config/AppVersion.json');    
-        const brandsToPublish = brand ? brand.split(',').map((str) => str.trim()) : [];
-        const availableBrands = Object.keys(appVersion).map((brandName) => (brandName === 'threeh' ? '3h' : brandName));
-        /** 如果有品牌參數，檢核品牌參數是否正確 */
-        if (brandsToPublish.length > 0) {
-            brandsToPublish.forEach((brandToPublish) => {
-                const isBrandExist = availableBrands.includes(brandToPublish);
-                if (!isBrandExist) {
-                    throw Error(
-                        `Brand "${brandToPublish}" is not exist in AppVersion.json. Available brands: ${availableBrands.join(
-                            ' | ',
-                        )}`,
-                    );
-                }
-            });
-        }
-
-        /** 更新 branch */
-        await updateBranch(env);
-
-        /** 在 uat 發版時需要更新 release 版本*/
-        if (env === 'uat') {
+        if (type) {
             await updateAppVersion({ appVersion, releaseType: type, brands: brandsToPublish });
         }
 
@@ -211,6 +171,5 @@ async function main() {
         log.error(e);
     }
 }
-
 
 main();
